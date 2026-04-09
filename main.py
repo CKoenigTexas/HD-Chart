@@ -310,8 +310,10 @@ def calculate_chart(req: ChartRequest):
         core = determine_type_strategy_authority(defined_centers, defined_channels)
 
         # 9. Profile
-        sun_line   = personality["sun"]["line"]
-        earth_line = personality["earth"]["line"]
+        # Sun line = conscious profile line. Earth line = opposite (1<>4, 2<>5, 3<>6)
+        sun_line = personality["sun"]["line"]
+        opposite_map = {1: 4, 2: 5, 3: 6, 4: 1, 5: 2, 6: 3}
+        earth_line = opposite_map.get(sun_line, personality["earth"]["line"])
         profile_name = get_profile_name(sun_line, earth_line)
         profile = f"{sun_line}/{earth_line} — {profile_name}"
 
