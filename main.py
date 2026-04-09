@@ -39,7 +39,7 @@ PLANETS = {
 
 # ── HD gate sequence (64 hexagrams mapped to ecliptic, starting from Aries) ──
 # Each gate spans 5.625° (360 / 64). Sequence starts at HD offset from 0° Aries.
-HD_OFFSET_DEGREES = 58.0  # degrees before 0° Aries where gate sequence begins
+HD_OFFSET_DEGREES = 302.0  # Gate 41 starts at 2° Aquarius = 302° absolute
 
 GATE_SEQUENCE = [
     41, 19, 13, 49, 30, 55, 37, 63, 22, 36, 25, 17, 21, 51, 42, 3,
@@ -263,8 +263,17 @@ def calculate_chart(req: ChartRequest):
             utc_dt.year, utc_dt.month, utc_dt.day,
             utc_dt.hour + utc_dt.minute / 60.0
         )
-        # Design date: exactly 88.736 days (≈88° of solar arc) before birth
-        design_jd = birth_jd - 88.736
+        # Design date: 88° of solar arc before birth (not calendar days)
+        # Find the exact JD when Sun was 88° behind its birth position
+        birth_sun_lon = swe.calc_ut(birth_jd, swe.SUN)[0][0]
+        target_lon = (birth_sun_lon - 88.0) % 360.0
+        design_jd = birth_jd - 90.0
+        for _ in range(50):
+            current_lon = swe.calc_ut(design_jd, swe.SUN)[0][0]
+            diff = (target_lon - current_lon + 180) % 360 - 180
+            if abs(diff) < 0.0001:
+                break
+            design_jd += diff / 360.0
 
         # 4. Calculate planet positions for both dates
         planet_keys = list(PLANETS.keys())
