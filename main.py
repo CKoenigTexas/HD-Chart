@@ -261,11 +261,14 @@ def calculate_chart(req: ChartRequest):
         local_aware = tz.localize(local_dt, is_dst=None)
         utc_dt   = local_aware.astimezone(pytz.utc)
 
-        # 3. Julian Day (UT)
-        birth_jd  = swe.julday(
+        # 3. Julian Day (UT) — use Swiss Ephemeris utc_to_jd for maximum precision
+        # This properly accounts for leap seconds and gives sub-second accuracy
+        ret, birth_jd_et, birth_jd_ut = swe.utc_to_jd(
             utc_dt.year, utc_dt.month, utc_dt.day,
-            utc_dt.hour + utc_dt.minute / 60.0
+            utc_dt.hour, utc_dt.minute, float(utc_dt.second),
+            swe.GREG_CAL
         )
+        birth_jd = birth_jd_ut  # Use Universal Time (UT) Julian Day
         # Design date: exactly 88 degrees of solar arc before birth
         # Newton-Raphson method using Sun's actual speed for fast convergence
         flags = swe.FLG_SWIEPH | swe.FLG_SPEED
@@ -317,10 +320,10 @@ def calculate_chart(req: ChartRequest):
         core = determine_type_strategy_authority(defined_centers, defined_channels)
 
         # 9. Profile
-        # Sun line = conscious profile line. Earth line = opposite (1<>4, 2<>5, 3<>6)
-        sun_line = personality["sun"]["line"]
-        opposite_map = {1: 4, 2: 5, 3: 6, 4: 1, 5: 2, 6: 3}
-        earth_line = opposite_map.get(sun_line, personality["earth"]["line"])
+        # Line 1 = Personality Sun line (conscious)
+        # Line 2 = Design Earth line (unconscious)
+        sun_line   = personality["sun"]["line"]
+        earth_line = design["earth"]["line"]
         profile_name = get_profile_name(sun_line, earth_line)
         profile = f"{sun_line}/{earth_line} — {profile_name}"
 
