@@ -1,745 +1,370 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pull Your Human Design Chart</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --teal: #3D7A7A;
-    --teal-light: #A8C8D8;
-    --sage: #A8B89A;
-    --linen: #F0EDE8;
-    --linen-dark: #E5E0D8;
-    --text-dark: #2C3E35;
-    --text-mid: #5A6B5E;
-    --white: #FFFFFF;
-  }
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from datetime import datetime, timedelta
+import swisseph as swe
+from timezonefinder import TimezoneFinder
+from geopy.geocoders import Nominatim
+import pytz
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+app = FastAPI(title="ROI of Peace — Human Design API")
 
-  body {
-    font-family: 'Lato', sans-serif;
-    background: var(--linen);
-    color: var(--text-dark);
-    min-height: 100vh;
-  }
+# Allow requests from any frontend (Netlify, Wix, etc.)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-  .page-wrap { max-width: 960px; margin: 0 auto; padding: 40px 24px 60px; }
+# ── Swiss Ephemeris setup ──────────────────────────────────────────────────
+swe.set_ephe_path("/app/ephe")  # Railway ephemeris files location
 
-  .intro { text-align: center; margin-bottom: 40px; }
-  .intro h1 {
-    font-family: 'Playfair Display', serif;
-    font-size: 2.2rem;
-    color: var(--teal);
-    margin-bottom: 8px;
-    line-height: 1.2;
-  }
-  .intro p { color: var(--text-mid); font-size: 1rem; font-weight: 300; }
-
-  .form-card {
-    background: var(--white);
-    border-radius: 16px;
-    padding: 36px 40px;
-    box-shadow: 0 4px 24px rgba(61,122,122,0.08);
-    margin-bottom: 40px;
-  }
-
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-  .form-group { display: flex; flex-direction: column; gap: 6px; }
-  .form-group.full { grid-column: 1 / -1; }
-
-  label {
-    font-size: 0.78rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--teal);
-  }
-
-  input, select {
-    padding: 12px 16px;
-    border: 1.5px solid var(--linen-dark);
-    border-radius: 8px;
-    font-family: 'Lato', sans-serif;
-    font-size: 0.95rem;
-    color: var(--text-dark);
-    background: var(--linen);
-    transition: border-color 0.2s;
-    -webkit-appearance: none;
-    appearance: none;
-  }
-  input:focus, select:focus { outline: none; border-color: var(--teal); background: var(--white); }
-
-  .time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
-  .btn-primary {
-    width: 100%;
-    margin-top: 24px;
-    padding: 16px;
-    background: var(--teal);
-    color: var(--white);
-    border: none;
-    border-radius: 10px;
-    font-family: 'Lato', sans-serif;
-    font-size: 1rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  .btn-primary:hover { background: #2d6060; }
-  .btn-primary:disabled { background: var(--teal-light); cursor: not-allowed; }
-
-  .loading {
-    display: none;
-    text-align: center;
-    padding: 60px 0;
-    color: var(--teal);
-    font-family: 'Playfair Display', serif;
-    font-style: italic;
-    font-size: 1.2rem;
-  }
-  .spinner {
-    width: 40px; height: 40px;
-    border: 3px solid var(--teal-light);
-    border-top-color: var(--teal);
-    border-radius: 50%;
-    animation: spin 0.9s linear infinite;
-    margin: 0 auto 16px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  #result { display: none; }
-
-  .result-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  .result-header h2 { font-family: 'Playfair Display', serif; font-size: 1.5rem; color: var(--teal); }
-
-  .btn-download {
-    padding: 10px 22px;
-    background: transparent;
-    border: 2px solid var(--teal);
-    border-radius: 8px;
-    color: var(--teal);
-    font-family: 'Lato', sans-serif;
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .btn-download:hover { background: var(--teal); color: var(--white); }
-
-  .btn-reset {
-    padding: 10px 22px;
-    background: transparent;
-    border: 2px solid var(--linen-dark);
-    border-radius: 8px;
-    color: var(--text-mid);
-    font-family: 'Lato', sans-serif;
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .chart-layout {
-    display: grid;
-    grid-template-columns: 1fr 340px;
-    gap: 28px;
-    align-items: start;
-  }
-
-  .bodygraph-wrap {
-    background: var(--white);
-    border-radius: 16px;
-    padding: 24px;
-    box-shadow: 0 4px 24px rgba(61,122,122,0.08);
-  }
-
-  .chart-name { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--teal); text-align: center; margin-bottom: 4px; }
-  .chart-birthinfo { font-size: 0.78rem; color: var(--text-mid); text-align: center; margin-bottom: 16px; }
-
-  #bodygraph-svg { width: 100%; height: auto; display: block; }
-
-  .summary-panel { display: flex; flex-direction: column; gap: 16px; }
-
-  .summary-card, .gates-card {
-    background: var(--white);
-    border-radius: 14px;
-    padding: 22px 24px;
-    box-shadow: 0 4px 24px rgba(61,122,122,0.08);
-  }
-
-  .summary-card h3, .gates-card h3 {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.1rem;
-    color: var(--teal);
-    margin-bottom: 16px;
-    padding-bottom: 10px;
-    border-bottom: 1.5px solid var(--linen-dark);
-  }
-
-  .summary-item { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--linen); }
-  .summary-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-  .summary-label { font-size: 0.72rem; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-mid); margin-bottom: 3px; line-height: 1.4; }
-  .summary-title { font-family: 'Playfair Display', serif; font-size: 1rem; color: var(--text-dark); font-weight: 600; margin-bottom: 2px; }
-  .summary-desc { font-size: 0.8rem; color: var(--text-mid); line-height: 1.5; font-weight: 300; }
-
-  .gate-rows { display: flex; flex-direction: column; gap: 7px; }
-  .gate-row { display: flex; align-items: baseline; gap: 8px; }
-  .gate-planet { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-mid); min-width: 62px; }
-  .gate-num { font-family: 'Playfair Display', serif; font-size: 0.95rem; font-weight: 600; min-width: 32px; }
-  .gate-name { font-size: 0.73rem; color: var(--text-mid); font-weight: 300; flex: 1; }
-  .gate-section-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sage); margin-top: 10px; margin-bottom: 4px; }
-
-  /* City autocomplete */
-  .autocomplete-wrap { position: relative; }
-  .autocomplete-list {
-    position: absolute;
-    top: 100%;
-    left: 0; right: 0;
-    background: var(--white);
-    border: 1.5px solid var(--teal);
-    border-radius: 8px;
-    margin-top: 4px;
-    z-index: 100;
-    box-shadow: 0 8px 24px rgba(61,122,122,0.12);
-    max-height: 220px;
-    overflow-y: auto;
-  }
-  .autocomplete-item {
-    padding: 10px 16px;
-    font-size: 0.88rem;
-    color: var(--text-dark);
-    cursor: pointer;
-    border-bottom: 1px solid var(--linen);
-    line-height: 1.4;
-  }
-  .autocomplete-item:last-child { border-bottom: none; }
-  .autocomplete-item:hover { background: var(--linen); color: var(--teal); }
-  .autocomplete-item .city-main { font-weight: 700; }
-  .autocomplete-item .city-sub { font-size: 0.75rem; color: var(--text-mid); }
-
-  .error-msg {
-    display: none;
-    background: #FEF0EE;
-    border: 1.5px solid #F0A090;
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-size: 0.85rem;
-    color: #8B3A2A;
-    margin-top: 16px;
-    line-height: 1.5;
-  }
-
-  .disclaimer { font-size: 0.72rem; color: var(--text-mid); text-align: center; margin-top: 32px; font-weight: 300; line-height: 1.5; }
-
-  @media (max-width: 700px) {
-    .chart-layout { grid-template-columns: 1fr; }
-    .form-grid { grid-template-columns: 1fr; }
-    .form-card { padding: 24px 20px; }
-    .intro h1 { font-size: 1.6rem; }
-    .page-wrap { padding: 24px 16px 48px; }
-  }
-</style>
-</head>
-<body>
-<div class="page-wrap">
-
-  <div class="intro">
-    <h1>Pull Your Human Design Chart</h1>
-    <p>Enter your birth details to generate your personalized chart</p>
-  </div>
-
-  <div class="form-card" id="form-section">
-    <div class="form-grid">
-      <div class="form-group full">
-        <label for="name">Your Name</label>
-        <input type="text" id="name" placeholder="First name or full name" />
-      </div>
-      <div class="form-group">
-        <label for="birth-year">Birth Year</label>
-        <select id="birth-year"></select>
-      </div>
-      <div class="form-group">
-        <label for="birth-month">Birth Month</label>
-        <select id="birth-month">
-          <option value="">Select month</option>
-          <option value="1">January</option><option value="2">February</option>
-          <option value="3">March</option><option value="4">April</option>
-          <option value="5">May</option><option value="6">June</option>
-          <option value="7">July</option><option value="8">August</option>
-          <option value="9">September</option><option value="10">October</option>
-          <option value="11">November</option><option value="12">December</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="birth-day">Birth Day</label>
-        <select id="birth-day"></select>
-      </div>
-      <div class="form-group">
-        <label>Birth Time <span style="font-weight:300;text-transform:none;letter-spacing:0">(24hr clock)</span></label>
-        <div class="time-row">
-          <select id="birth-hour"></select>
-          <select id="birth-minute"></select>
-        </div>
-      </div>
-      <div class="form-group full">
-        <label for="birth-place">Birth City</label>
-        <div class="autocomplete-wrap">
-          <input type="text" id="birth-place" placeholder="Start typing your birth city..." autocomplete="off" oninput="cityAutocomplete(this.value)" />
-          <div class="autocomplete-list" id="autocomplete-list" style="display:none"></div>
-        </div>
-        <input type="hidden" id="birth-place-full" />
-      </div>
-    </div>
-    <div class="error-msg" id="error-msg"></div>
-    <button class="btn-primary" id="submit-btn" onclick="generateChart()">View Your Chart</button>
-  </div>
-
-  <div class="loading" id="loading">
-    <div class="spinner"></div>
-    Calculating your chart...
-  </div>
-
-  <div id="result">
-    <div class="result-header">
-      <h2 id="result-title">Your Human Design Chart</h2>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn-reset" onclick="resetForm()">← New Chart</button>
-        <button class="btn-download" onclick="downloadChart()">↓ Download Chart</button>
-      </div>
-    </div>
-    <div class="chart-layout">
-      <div class="bodygraph-wrap">
-        <div class="chart-name" id="chart-name"></div>
-        <div class="chart-birthinfo" id="chart-birthinfo"></div>
-        <svg id="bodygraph-svg" viewBox="0 0 400 550" xmlns="http://www.w3.org/2000/svg"></svg>
-      </div>
-      <div class="summary-panel">
-        <div class="summary-card">
-          <h3>Your Chart Summary</h3>
-          <div id="summary-items"></div>
-        </div>
-
-      </div>
-    </div>
-    <p class="disclaimer">Birth time accuracy affects your chart. If unsure of your exact time, try a few variations to see how your chart shifts.</p>
-  </div>
-
-</div>
-
-<script>
-// ─────────────────────────────────────────────────────────────────
-// IMPORTANT: Replace this URL with your Railway API URL after deploy
-// ─────────────────────────────────────────────────────────────────
-const API_URL = "https://hd-chart-production.up.railway.app";
-
-// ── Bodygraph rendering constants ──────────────────────────────────
-const CENTER_POSITIONS = {
-  HEAD:   { x: 200, y: 40,  w: 68,  h: 50,  shape: 'triangle-up' },
-  AJNA:   { x: 200, y: 114, w: 68,  h: 50,  shape: 'triangle-down' },
-  THROAT: { x: 200, y: 190, w: 88,  h: 36,  shape: 'rect' },
-  G:      { x: 200, y: 266, w: 58,  h: 58,  shape: 'diamond' },
-  SACRAL: { x: 200, y: 364, w: 88,  h: 36,  shape: 'rect' },
-  EGO:    { x: 270, y: 248, w: 44,  h: 44,  shape: 'diamond' },
-  SPLEEN: { x: 128, y: 294, w: 44,  h: 44,  shape: 'diamond' },
-  SOLAR:  { x: 272, y: 320, w: 44,  h: 44,  shape: 'diamond' },
-  ROOT:   { x: 200, y: 434, w: 88,  h: 36,  shape: 'rect' }
-};
-
-const CHANNELS = [
-  [1,8],[2,14],[3,60],[4,63],[5,15],[6,59],[7,31],[9,52],[10,20],[11,56],
-  [12,22],[13,33],[16,48],[17,62],[18,58],[19,49],[20,34],[20,57],[21,45],
-  [23,43],[24,61],[25,51],[26,44],[27,50],[28,38],[29,46],[30,41],[32,54],
-  [33,13],[34,57],[35,36],[37,40],[39,55],[42,53],[43,23],[44,26],[45,21],
-  [46,29],[47,64],[48,16],[49,19],[50,27],[51,25],[52,9],[53,42],[54,32],
-  [55,39],[56,11],[57,20],[58,18],[59,6],[60,3],[61,24],[62,17],[63,4],[64,47]
-];
-
-const CENTER_GATES = {
-  HEAD:   [64,61,63],
-  AJNA:   [47,24,4,17,43,11],
-  THROAT: [62,23,56,35,12,45,33,8,31,20,16],
-  G:      [7,1,13,10,25,15,46,2],
-  SACRAL: [5,14,29,59,9,3,42,27,34],
-  EGO:    [21,40,26,51],
-  SPLEEN: [48,57,44,50,32,28,18],
-  SOLAR:  [30,55,49,37,22,36,6],
-  ROOT:   [60,52,19,39,53,54,58,38,41]
-};
-
-const GATE_NAMES = {
-  1:"Self-Expression",2:"Receptivity",3:"Ordering",4:"Formulization",5:"Fixed Rhythms",
-  6:"Friction",7:"The Role of the Self",8:"Contribution",9:"Focus",10:"Behavior of the Self",
-  11:"Ideas",12:"Caution",13:"The Listener",14:"Power Skills",15:"Modesty",16:"Skills",
-  17:"Following",18:"Correction",19:"Wanting",20:"The Now",21:"Biting Through",22:"Openness",
-  23:"Assimilation",24:"Rationalization",25:"Innocence",26:"The Trickster",27:"Caring",
-  28:"The Game Player",29:"Perseverance",30:"Recognition of Feelings",31:"Leading",
-  32:"Continuity",33:"Privacy",34:"Power",35:"Change",36:"Crisis",37:"Friendship",
-  38:"Opposition",39:"Provocation",40:"Aloneness",41:"Contraction",42:"Growth",43:"Insight",
-  44:"Coming to Meet",45:"Gathering Together",46:"Pushing Upward",47:"Realization",
-  48:"The Well",49:"Revolution",50:"Values",51:"The Arousing",52:"Stillness",53:"Beginnings",
-  54:"Ambition",55:"Abundance",56:"Stimulation",57:"The Gentle",58:"Vitality",59:"Sexuality",
-  60:"Acceptance",61:"Mystery",62:"Preponderance of the Small",63:"Doubt",64:"Confusion"
-};
-
-const GATE_POSITIONS = {
-  64:{x:170,y:22}, 61:{x:200,y:16}, 63:{x:230,y:22},
-  47:{x:165,y:92}, 24:{x:200,y:88}, 4:{x:235,y:92},
-  17:{x:230,y:108}, 43:{x:200,y:134}, 11:{x:170,y:108},
-  62:{x:150,y:180}, 23:{x:162,y:193}, 56:{x:156,y:207},
-  35:{x:250,y:180}, 12:{x:238,y:193}, 45:{x:244,y:207},
-  33:{x:228,y:174}, 8:{x:160,y:174}, 31:{x:234,y:212},
-  20:{x:163,y:212}, 16:{x:250,y:220},
-  7:{x:160,y:250}, 1:{x:168,y:265}, 13:{x:160,y:282},
-  10:{x:193,y:244}, 25:{x:207,y:244}, 15:{x:222,y:265},
-  46:{x:230,y:282}, 2:{x:227,y:297},
-  21:{x:296,y:232}, 40:{x:298,y:250}, 26:{x:296,y:268}, 51:{x:296,y:286},
-  48:{x:98,y:270}, 57:{x:90,y:288}, 44:{x:90,y:308}, 50:{x:98,y:324},
-  32:{x:112,y:340}, 28:{x:102,y:352}, 18:{x:108,y:312},
-  30:{x:302,y:302}, 55:{x:312,y:318}, 49:{x:302,y:336},
-  37:{x:292,y:352}, 22:{x:312,y:290}, 36:{x:302,y:368}, 6:{x:290,y:382},
-  5:{x:150,y:354}, 14:{x:162,y:368}, 29:{x:150,y:382},
-  59:{x:250,y:354}, 9:{x:238,y:368}, 3:{x:250,y:382},
-  42:{x:172,y:350}, 27:{x:228,y:350}, 34:{x:205,y:348},
-  60:{x:150,y:422}, 52:{x:162,y:438}, 19:{x:150,y:454},
-  39:{x:250,y:422}, 53:{x:238,y:438}, 54:{x:250,y:454},
-  58:{x:173,y:460}, 38:{x:227,y:460}, 41:{x:200,y:465}
-};
-
-function getCenterForGate(gate) {
-  for (const [center, gates] of Object.entries(CENTER_GATES)) {
-    if (gates.includes(gate)) return center;
-  }
-  return null;
+# ── Planet constants ───────────────────────────────────────────────────────
+PLANETS = {
+    "sun":        swe.SUN,
+    "earth":      None,          # Earth = Sun + 180°
+    "north_node": swe.TRUE_NODE,
+    "south_node": None,          # South Node = North Node + 180°
+    "moon":       swe.MOON,
+    "mercury":    swe.MERCURY,
+    "venus":      swe.VENUS,
+    "mars":       swe.MARS,
+    "jupiter":    swe.JUPITER,
+    "saturn":     swe.SATURN,
+    "uranus":     swe.URANUS,
+    "neptune":    swe.NEPTUNE,
+    "pluto":      swe.PLUTO,
 }
 
-function renderCenter(name, pos, isDefined) {
-  const fill   = isDefined ? 'var(--teal)' : 'var(--white)';
-  const stroke = isDefined ? '#2d6060'     : 'var(--sage)';
-  const label  = isDefined ? '#FFFFFF'     : 'var(--sage)';
-  const sw     = 1.5;
-  let shape = '';
+# ── HD gate sequence (64 hexagrams mapped to ecliptic, starting from Aries) ──
+# Each gate spans 5.625° (360 / 64). Sequence starts at HD offset from 0° Aries.
+HD_OFFSET_DEGREES = 302.0  # Gate 41 starts at 2° Aquarius = 302° absolute
 
-  if (pos.shape === 'rect') {
-    shape = `<rect x="${pos.x-pos.w/2}" y="${pos.y-pos.h/2}" width="${pos.w}" height="${pos.h}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
-  } else if (pos.shape === 'diamond') {
-    const hw = pos.w/2, hh = pos.h/2;
-    shape = `<polygon points="${pos.x},${pos.y-hh} ${pos.x+hw},${pos.y} ${pos.x},${pos.y+hh} ${pos.x-hw},${pos.y}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
-  } else if (pos.shape === 'triangle-up') {
-    shape = `<polygon points="${pos.x},${pos.y-pos.h/2} ${pos.x-pos.w/2},${pos.y+pos.h/2} ${pos.x+pos.w/2},${pos.y+pos.h/2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
-  } else if (pos.shape === 'triangle-down') {
-    shape = `<polygon points="${pos.x},${pos.y+pos.h/2} ${pos.x-pos.w/2},${pos.y-pos.h/2} ${pos.x+pos.w/2},${pos.y-pos.h/2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
-  }
+GATE_SEQUENCE = [
+    41, 19, 13, 49, 30, 55, 37, 63, 22, 36, 25, 17, 21, 51, 42, 3,
+    27, 24,  2, 23,  8, 20, 16, 35, 45, 12, 15, 52, 39, 53, 62, 56,
+    31, 33,  7,  4, 29, 59, 40, 64, 47,  6, 46, 18, 48, 57, 32, 50,
+    28, 44,  1, 43, 14, 34,  9,  5, 26, 11, 10, 58, 38, 54, 61, 60
+]
 
-  const shortNames = {HEAD:'HEAD',AJNA:'AJNA',THROAT:'THROAT',G:'G',SACRAL:'SACRAL',EGO:'EGO',SPLEEN:'SPLEEN',SOLAR:'SOLAR',ROOT:'ROOT'};
-  shape += `<text x="${pos.x}" y="${pos.y+1}" text-anchor="middle" dominant-baseline="middle" fill="${label}" font-family="Lato,sans-serif" font-size="7.5" font-weight="700" letter-spacing="0.5">${shortNames[name]}</text>`;
-  return shape;
+GATE_NAMES = {
+    1:"Self-Expression", 2:"Receptivity", 3:"Ordering", 4:"Formulization",
+    5:"Fixed Rhythms", 6:"Friction", 7:"The Role of the Self", 8:"Contribution",
+    9:"Focus", 10:"Behavior of the Self", 11:"Ideas", 12:"Caution",
+    13:"The Listener", 14:"Power Skills", 15:"Modesty", 16:"Skills",
+    17:"Following", 18:"Correction", 19:"Wanting", 20:"The Now",
+    21:"Biting Through", 22:"Openness", 23:"Assimilation", 24:"Rationalization",
+    25:"Innocence", 26:"The Trickster", 27:"Caring", 28:"The Game Player",
+    29:"Perseverance", 30:"Recognition of Feelings", 31:"Leading", 32:"Continuity",
+    33:"Privacy", 34:"Power", 35:"Change", 36:"Crisis", 37:"Friendship",
+    38:"Opposition", 39:"Provocation", 40:"Aloneness", 41:"Contraction",
+    42:"Growth", 43:"Insight", 44:"Coming to Meet", 45:"Gathering Together",
+    46:"Pushing Upward", 47:"Realization", 48:"The Well", 49:"Revolution",
+    50:"Values", 51:"The Arousing", 52:"Stillness", 53:"Beginnings",
+    54:"Ambition", 55:"Abundance", 56:"Stimulation", 57:"The Gentle",
+    58:"Vitality", 59:"Sexuality", 60:"Acceptance", 61:"Mystery",
+    62:"Preponderance of the Small", 63:"Doubt", 64:"Confusion"
 }
 
-function renderBodygraph(data) {
-  const svg = document.getElementById('bodygraph-svg');
-  const definedCenters  = new Set(data.defined_centers);
-  const personalityGates = new Set(data.personality_gates);
-  const designGates      = new Set(data.design_gates);
-  const allGates         = new Set(data.all_gates);
-  let html = '';
-
-  // Channels (draw first, behind centers)
-  for (const [a, b] of CHANNELS) {
-    const ca = getCenterForGate(a), cb = getCenterForGate(b);
-    if (!ca || !cb) continue;
-    const pa = CENTER_POSITIONS[ca], pb = CENTER_POSITIONS[cb];
-    const isDefined = allGates.has(a) && allGates.has(b);
-    const color = isDefined ? '#3D7A7A' : '#E0DDD8';
-    const width = isDefined ? 3 : 1;
-    html += `<line x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="${color}" stroke-width="${width}" stroke-linecap="round"/>`;
-  }
-
-  // Centers
-  for (const [name, pos] of Object.entries(CENTER_POSITIONS)) {
-    html += renderCenter(name, pos, definedCenters.has(name));
-  }
-
-  // Gate numbers
-  for (const [gStr, pos] of Object.entries(GATE_POSITIONS)) {
-    const gate = parseInt(gStr);
-    const inP  = personalityGates.has(gate);
-    const inD  = designGates.has(gate);
-    const inB  = inP && inD;
-    let fill = '#CECAC4';
-    let fw = '400', fs = '7';
-    if (inB)  { fill = '#2C3E35'; fw = '700'; fs = '7.5'; }
-    else if (inP) { fill = '#3D7A7A'; fw = '700'; fs = '7.5'; }
-    else if (inD) { fill = '#A8B89A'; fw = '700'; fs = '7.5'; }
-    html += `<text x="${pos.x}" y="${pos.y}" text-anchor="middle" dominant-baseline="middle" fill="${fill}" font-family="Lato,sans-serif" font-size="${fs}" font-weight="${fw}">${gate}</text>`;
-  }
-
-  svg.innerHTML = html;
+# ── Center gate assignments ────────────────────────────────────────────────
+CENTER_GATES = {
+    "HEAD":   [64, 61, 63],
+    "AJNA":   [47, 24, 4, 17, 43, 11],
+    "THROAT": [62, 23, 56, 35, 12, 45, 33, 8, 31, 20, 16],
+    "G":      [7, 1, 13, 10, 25, 15, 46, 2],
+    "SACRAL": [5, 14, 29, 59, 9, 3, 42, 27, 34],
+    "EGO":    [21, 40, 26, 51],
+    "SPLEEN": [48, 57, 44, 50, 32, 28, 18],
+    "SOLAR":  [30, 55, 49, 37, 22, 36, 6],
+    "ROOT":   [60, 52, 19, 39, 53, 54, 58, 38, 41]
 }
 
-function renderSummary(data) {
-  const typeDescs = {
-    'Generator':           'Your gifts are energy, desire, and the ability to sustain. You\'re here to do what truly lights you up.',
-    'Manifesting Generator':'Your gifts are speed, multi-passionate energy, and finding better ways. You\'re here to respond and move fast.',
-    'Manifestor':          'Your gifts are initiating, creating impact, and setting things in motion. You\'re here to act independently.',
-    'Projector':           'Your gifts are guiding, seeing the big picture, and leading with wisdom. You\'re here to be recognized.',
-    'Reflector':           'Your gifts are sampling, reflecting, and showing communities their own health. You\'re here to be a mirror.'
-  };
+# ── Channel pairs ──────────────────────────────────────────────────────────
+CHANNELS = [
+    (1,8),(2,14),(3,60),(4,63),(5,15),(6,59),(7,31),(9,52),(10,20),(11,56),
+    (12,22),(13,33),(16,48),(17,62),(18,58),(19,49),(20,34),(20,57),(21,45),
+    (23,43),(24,61),(25,51),(26,44),(27,50),(28,38),(29,46),(30,41),(32,54),
+    (33,13),(34,57),(35,36),(37,40),(39,55),(42,53),(43,23),(44,26),(45,21),
+    (46,29),(47,64),(48,16),(49,19),(50,27),(51,25),(52,9),(53,42),(54,32),
+    (55,39),(56,11),(57,20),(58,18),(59,6),(60,3),(61,24),(62,17),(63,4),(64,47)
+]
 
-  const items = [
-    { label: 'Type',            title: data.type,       desc: typeDescs[data.type] || '' },
-    { label: 'Strategy',        title: '',              desc: data.strategy },
-    { label: 'Inner Authority', title: data.authority,  desc: data.authority_desc },
-    { label: 'Profile',         title: data.profile.split(' — ')[0], desc: (data.profile.split(' — ')[1] || '') },
-    { label: 'Signature',       title: data.signature,  desc: 'The feeling that tells you you\'re aligned.' },
-    { label: 'Not-Self Theme',  title: data.not_self,   desc: 'The feeling that signals something is off.' },
-    { label: 'Defined Centers', title: '',              desc: data.defined_centers.join(', ') || 'None — you are a Reflector' },
-  ];
+# ── Helpers ────────────────────────────────────────────────────────────────
+def longitude_to_gate_line(lon: float) -> dict:
+    """Convert ecliptic longitude (0–360) to HD gate and line."""
+    gate_span = 360.0 / 64.0          # 5.625° per gate
+    line_span  = gate_span / 6.0      # 0.9375° per line
 
-  document.getElementById('summary-items').innerHTML = items.map(i => `
-    <div class="summary-item">
-      <div class="summary-label">${i.label}</div>
-      ${i.title ? `<div class="summary-title">${i.title}</div>` : ''}
-      ${i.desc  ? `<div class="summary-desc">${i.desc}</div>`   : ''}
-    </div>
-  `).join('');
-}
+    adjusted   = (lon - HD_OFFSET_DEGREES) % 360
+    gate_index = int(adjusted / gate_span) % 64
+    line       = int((adjusted % gate_span) / line_span) + 1
+    line       = min(line, 6)         # clamp safety
 
-function renderGates(data) {
-  const pLabels = {
-    sun:'Sun', earth:'Earth', north_node:'N.Node', south_node:'S.Node',
-    moon:'Moon', mercury:'Mercury', venus:'Venus', mars:'Mars'
-  };
-  const planetOrder = ['sun','earth','north_node','south_node','moon','mercury','venus','mars'];
+    gate = GATE_SEQUENCE[gate_index]
+    return {"gate": gate, "line": line, "name": GATE_NAMES.get(gate, "")}
 
-  let html = '<div class="gate-rows">';
-  html += `<div class="gate-section-label">Personality (Conscious)</div>`;
-  for (const p of planetOrder) {
-    const g = data.personality[p];
-    if (!g) continue;
-    html += `<div class="gate-row">
-      <span class="gate-planet">${pLabels[p]}</span>
-      <span class="gate-num" style="color:#3D7A7A">${g.gate}.${g.line}</span>
-      <span class="gate-name">${g.name}</span>
-    </div>`;
-  }
-  html += `<div class="gate-section-label" style="margin-top:12px">Design (Unconscious)</div>`;
-  for (const p of planetOrder) {
-    const g = data.design[p];
-    if (!g) continue;
-    html += `<div class="gate-row">
-      <span class="gate-planet">${pLabels[p]}</span>
-      <span class="gate-num" style="color:#A8B89A">${g.gate}.${g.line}</span>
-      <span class="gate-name">${g.name}</span>
-    </div>`;
-  }
-  html += '</div>';
-  document.getElementById('gates-list').innerHTML = html;
-}
 
-// ── Form helpers ──────────────────────────────────────────────────
-function populateSelects() {
-  const yearSel = document.getElementById('birth-year');
-  yearSel.innerHTML = '<option value="">Year</option>';
-  for (let y = new Date().getFullYear() - 1; y >= 1920; y--) {
-    yearSel.innerHTML += `<option value="${y}">${y}</option>`;
-  }
-  const daySel = document.getElementById('birth-day');
-  daySel.innerHTML = '<option value="">Day</option>';
-  for (let d = 1; d <= 31; d++) daySel.innerHTML += `<option value="${d}">${d}</option>`;
+def get_planet_longitude(jd: float, planet_key: str) -> float:
+    """Return ecliptic longitude for a planet at a given Julian Day."""
+    # Use high-precision flag for all calculations
+    flags = swe.FLG_SWIEPH | swe.FLG_SPEED
 
-  const hourSel = document.getElementById('birth-hour');
-  hourSel.innerHTML = '<option value="">Hour</option>';
-  for (let h = 0; h < 24; h++) hourSel.innerHTML += `<option value="${h}">${String(h).padStart(2,'0')}</option>`;
+    if planet_key == "earth":
+        sun_lon = swe.calc_ut(jd, swe.SUN, flags)[0][0]
+        return (sun_lon + 180.0) % 360.0
 
-  const minSel = document.getElementById('birth-minute');
-  minSel.innerHTML = '<option value="">Min</option>';
-  for (let m = 0; m < 60; m++) minSel.innerHTML += `<option value="${m}">${String(m).padStart(2,'0')}</option>`;
-}
+    if planet_key == "south_node":
+        nn_lon = swe.calc_ut(jd, swe.TRUE_NODE, flags)[0][0]
+        return (nn_lon + 180.0) % 360.0
 
-function showError(msg) {
-  const el = document.getElementById('error-msg');
-  el.innerHTML = msg;
-  el.style.display = 'block';
-}
-function hideError() { document.getElementById('error-msg').style.display = 'none'; }
+    planet_id = PLANETS[planet_key]
+    result = swe.calc_ut(jd, planet_id, flags)
+    return result[0][0]
 
-async function generateChart() {
-  hideError();
 
-  const name   = document.getElementById('name').value.trim();
-  const year   = parseInt(document.getElementById('birth-year').value);
-  const month  = parseInt(document.getElementById('birth-month').value);
-  const day    = parseInt(document.getElementById('birth-day').value);
-  const hour   = parseInt(document.getElementById('birth-hour').value);
-  const minute = parseInt(document.getElementById('birth-minute').value);
-  const city   = document.getElementById('birth-place-full').value.trim() || document.getElementById('birth-place').value.trim();
+def get_center_for_gate(gate: int) -> str | None:
+    for center, gates in CENTER_GATES.items():
+        if gate in gates:
+            return center
+    return None
 
-  if (!year || !month || !day) { showError('Please select your full birth date.'); return; }
-  if (isNaN(hour) || isNaN(minute)) { showError('Please select your birth time. If unknown, use 12:00.'); return; }
-  if (!city) { showError('Please enter your birth city.'); return; }
 
-  document.getElementById('form-section').style.display = 'none';
-  document.getElementById('loading').style.display = 'block';
+def determine_type_strategy_authority(defined_centers: set, defined_channels: list) -> dict:
+    has_sacral  = "SACRAL"  in defined_centers
+    has_throat  = "THROAT"  in defined_centers
+    has_solar   = "SOLAR"   in defined_centers
+    has_spleen  = "SPLEEN"  in defined_centers
+    has_ego     = "EGO"     in defined_centers
+    has_g       = "G"       in defined_centers
 
-  try {
-    const response = await fetch(`${API_URL}/chart`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, year, month, day, hour, minute, city })
-    });
+    # Motor-to-throat connection check
+    motor_centers = {"SACRAL", "ROOT", "SOLAR", "EGO"}
+    motor_to_throat = False
+    for (a, b) in defined_channels:
+        ca = get_center_for_gate(a)
+        cb = get_center_for_gate(b)
+        if (ca in motor_centers and cb == "THROAT") or \
+           (cb in motor_centers and ca == "THROAT"):
+            motor_to_throat = True
+            break
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.detail || 'Something went wrong. Please try again.');
+    # Type
+    if has_sacral and not motor_to_throat:
+        hd_type   = "Generator"
+        strategy  = "Respond to what lights you up. Let your gut guide your yes and no."
+        not_self  = "Frustration"
+        signature = "Satisfaction"
+    elif has_sacral and motor_to_throat:
+        hd_type   = "Manifesting Generator"
+        strategy  = "Respond first, then inform before you act. It's okay to skip steps."
+        not_self  = "Frustration & Anger"
+        signature = "Satisfaction & Peace"
+    elif not has_sacral and motor_to_throat:
+        hd_type   = "Manifestor"
+        strategy  = "Inform those who will be affected before you act."
+        not_self  = "Anger"
+        signature = "Peace"
+    elif not has_sacral and not has_throat and len(defined_centers) == 0:
+        hd_type   = "Reflector"
+        strategy  = "Wait a full lunar cycle (28 days) before making major decisions."
+        not_self  = "Disappointment"
+        signature = "Surprise"
+    else:
+        hd_type   = "Projector"
+        strategy  = "Wait for the invitation in work, relationships, and major decisions."
+        not_self  = "Bitterness"
+        signature = "Success"
+
+    # Authority
+    if has_solar:
+        authority = "Emotional / Solar Plexus"
+        auth_desc = "Sleep on decisions. Clarity comes in waves, not all at once."
+    elif has_sacral:
+        authority = "Sacral"
+        auth_desc = "Trust your gut response — the immediate yes or no in your body."
+    elif has_spleen:
+        authority = "Splenic"
+        auth_desc = "Trust the quiet, in-the-moment instinct. It speaks once and softly."
+    elif has_ego:
+        authority = "Ego / Will"
+        auth_desc = "Make decisions based on what you truly want and are willing to commit to."
+    elif has_g:
+        authority = "Self-Projected"
+        auth_desc = "Talk it out with people you trust. Hearing your own voice brings clarity."
+    elif "HEAD" in defined_centers or "AJNA" in defined_centers:
+        authority = "Mental / Sounding Board"
+        auth_desc = "Talk through decisions with different trusted people and notice what resonates."
+    else:
+        authority = "Lunar (Reflector)"
+        auth_desc = "Track how you feel across a full lunar cycle before committing."
+
+    return {
+        "type": hd_type,
+        "strategy": strategy,
+        "not_self": not_self,
+        "signature": signature,
+        "authority": authority,
+        "authority_desc": auth_desc,
     }
 
-    const data = await response.json();
 
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('result').style.display = 'block';
+def get_profile_name(line1: int, line2: int) -> str:
+    names = {
+        (1,4): "The Investigator / Opportunist",
+        (2,5): "The Hermit / Heretic",
+        (3,6): "The Martyr / Role Model",
+        (4,1): "The Opportunist / Investigator",
+        (5,2): "The Heretic / Hermit",
+        (6,3): "The Role Model / Martyr",
+        (1,3): "The Investigator / Martyr",
+        (2,4): "The Hermit / Opportunist",
+        (3,5): "The Martyr / Heretic",
+        (4,6): "The Opportunist / Role Model",
+        (5,1): "The Heretic / Investigator",
+        (6,2): "The Role Model / Hermit",
+    }
+    return names.get((line1, line2), f"{line1}/{line2}")
 
-    const displayName = name || 'Your';
-    document.getElementById('chart-name').textContent = displayName + (displayName === 'Your' ? '' : "'s") + ' Human Design Chart';
-    document.getElementById('result-title').textContent = displayName + (displayName === 'Your' ? '' : "'s") + ' Human Design Chart';
 
-    const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
-    document.getElementById('chart-birthinfo').textContent =
-      `${monthNames[month]} ${day}, ${year} · ${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')} · ${city}`;
+# ── Request / Response models ──────────────────────────────────────────────
+class ChartRequest(BaseModel):
+    name: str = ""
+    year: int
+    month: int
+    day: int
+    hour: int
+    minute: int
+    city: str          # "Lansing, Michigan, United States"
 
-    renderBodygraph(data);
-    renderSummary(data);
+
+# ── Main endpoint ──────────────────────────────────────────────────────────
+@app.post("/chart")
+def calculate_chart(req: ChartRequest):
+    try:
+        # 1. Geocode birth city → lat/lng
+        geolocator = Nominatim(user_agent="roi-of-peace-hd")
+        location   = geolocator.geocode(req.city, timeout=10)
+        if not location:
+            raise HTTPException(status_code=400, detail=f"Could not find city: {req.city}")
+
+        lat, lng = location.latitude, location.longitude
+
+        # 2. Get timezone for that lat/lng
+        tf       = TimezoneFinder()
+        tz_name  = tf.timezone_at(lat=lat, lng=lng)
+        if not tz_name:
+            raise HTTPException(status_code=400, detail="Could not determine timezone for that location.")
+
+        tz       = pytz.timezone(tz_name)
+        local_dt = datetime(req.year, req.month, req.day, req.hour, req.minute)
+        local_aware = tz.localize(local_dt, is_dst=None)
+        utc_dt   = local_aware.astimezone(pytz.utc)
+
+        # 3. Julian Day (UT) — use Swiss Ephemeris utc_to_jd for maximum precision
+        # Returns (jd_et, jd_ut) tuple
+        jd_result = swe.utc_to_jd(
+            utc_dt.year, utc_dt.month, utc_dt.day,
+            utc_dt.hour, utc_dt.minute, float(utc_dt.second),
+            swe.GREG_CAL
+        )
+        birth_jd = jd_result[1]  # jd_ut — Universal Time Julian Day
+        # Design date: exactly 88 degrees of solar arc before birth
+        # Newton-Raphson method using Sun's actual speed for fast convergence
+        flags = swe.FLG_SWIEPH | swe.FLG_SPEED
+        birth_sun_data = swe.calc_ut(birth_jd, swe.SUN, flags)[0]
+        birth_sun_lon = birth_sun_data[0]
+        target_lon = (birth_sun_lon - 88.0) % 360.0
+        design_jd = birth_jd - 90.0  # Good starting estimate (~88 days)
+        for _ in range(20):
+            sun_data = swe.calc_ut(design_jd, swe.SUN, flags)[0]
+            current_lon = sun_data[0]
+            sun_speed = sun_data[3]  # degrees/day (actual speed from Swiss Ephemeris)
+            diff = (target_lon - current_lon + 180) % 360 - 180
+            if abs(diff) < 0.0000001:  # ~0.00036 arcseconds — extremely precise
+                break
+            design_jd += diff / sun_speed  # Newton-Raphson step
+
+        # 4. Calculate planet positions for both dates
+        planet_keys = list(PLANETS.keys())
+
+        personality = {}
+        design      = {}
+
+        for key in planet_keys:
+            p_lon = get_planet_longitude(birth_jd,  key)
+            d_lon = get_planet_longitude(design_jd, key)
+            personality[key] = longitude_to_gate_line(p_lon)
+            design[key]      = longitude_to_gate_line(d_lon)
+
+        # 5. Collect activated gates
+        personality_gates = set(v["gate"] for v in personality.values())
+        design_gates      = set(v["gate"] for v in design.values())
+        all_gates         = personality_gates | design_gates
+
+        # 6. Find defined channels
+        defined_channels = [
+            (a, b) for (a, b) in CHANNELS
+            if a in all_gates and b in all_gates
+        ]
+
+        # 7. Find defined centers
+        defined_centers = set()
+        for (a, b) in defined_channels:
+            for gate in (a, b):
+                c = get_center_for_gate(gate)
+                if c:
+                    defined_centers.add(c)
+
+        # 8. Type / Strategy / Authority
+        core = determine_type_strategy_authority(defined_centers, defined_channels)
+
+        # 9. Profile
+        # Line 1 = Personality Sun line (conscious)
+        # Line 2 = Design Earth line (unconscious)
+        sun_line   = personality["sun"]["line"]
+        earth_line = design["earth"]["line"]
+        profile_name = get_profile_name(sun_line, earth_line)
+        profile = f"{sun_line}/{earth_line} — {profile_name}"
+
+        # 10. Build response
+        return {
+            "name": req.name,
+            "birth": {
+                "local": f"{req.year}-{req.month:02d}-{req.day:02d} {req.hour:02d}:{req.minute:02d}",
+                "city": req.city,
+                "timezone": tz_name,
+                "utc": utc_dt.strftime("%Y-%m-%d %H:%M UTC"),
+            },
+            "type":           core["type"],
+            "strategy":       core["strategy"],
+            "not_self":       core["not_self"],
+            "signature":      core["signature"],
+            "authority":      core["authority"],
+            "authority_desc": core["authority_desc"],
+            "profile":        profile,
+            "profile_lines":  [sun_line, earth_line],
+            "personality":    personality,
+            "design":         design,
+            "personality_gates": sorted(list(personality_gates)),
+            "design_gates":      sorted(list(design_gates)),
+            "all_gates":         sorted(list(all_gates)),
+            "defined_channels":  defined_channels,
+            "defined_centers":   sorted(list(defined_centers)),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-    window._chartData = data;
-    window._chartMeta = { name, year, month, day, hour, minute, city };
+@app.get("/")
+def root():
+    return {"status": "ROI of Peace Human Design API is running"}
 
-  } catch (err) {
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('form-section').style.display = 'block';
-    showError(`
-      <strong>Couldn't generate your chart.</strong><br>
-      ${err.message}<br><br>
-      <small>If the error mentions "city not found", try being more specific — e.g. "Lansing, Michigan, United States"</small>
-    `);
-  }
-}
 
-function resetForm() {
-  document.getElementById('result').style.display = 'none';
-  document.getElementById('form-section').style.display = 'block';
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
-function downloadChart() {
-  const data = window._chartData;
-  const meta = window._chartMeta;
-  if (!data) return;
-
-  const svgContent     = document.getElementById('bodygraph-svg').outerHTML;
-  const summaryContent = document.getElementById('summary-items').innerHTML;
-  const chartName      = document.getElementById('chart-name').textContent;
-  const chartInfo      = document.getElementById('chart-birthinfo').textContent;
-
-  const html = `<!DOCTYPE html><html><head>
-<meta charset="UTF-8"><title>${chartName}</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
-<style>
-:root{--teal:#3D7A7A;--teal-light:#A8C8D8;--sage:#A8B89A;--linen:#F0EDE8;--linen-dark:#E5E0D8;--text-dark:#2C3E35;--text-mid:#5A6B5E;}
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Lato',sans-serif;background:var(--linen);color:var(--text-dark);padding:40px 32px;}
-.wrap{max-width:920px;margin:0 auto;}
-h1{font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--teal);margin-bottom:4px;}
-.info{font-size:0.85rem;color:var(--text-mid);margin-bottom:28px;}
-.layout{display:grid;grid-template-columns:1fr 320px;gap:24px;align-items:start;}
-.bg-wrap{background:#fff;border-radius:16px;padding:20px;box-shadow:0 4px 20px rgba(61,122,122,0.08);}
-svg{width:100%;height:auto;}
-.card{background:#fff;border-radius:14px;padding:20px 22px;box-shadow:0 4px 20px rgba(61,122,122,0.08);}
-.card h3{font-family:'Playfair Display',serif;font-size:1rem;color:var(--teal);margin-bottom:12px;padding-bottom:8px;border-bottom:1.5px solid var(--linen-dark);}
-.summary-item{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--linen);}
-.summary-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
-.summary-label{font-size:0.6rem;font-weight:700;text-transform:none;letter-spacing:0;color:var(--text-mid);margin-bottom:2px;line-height:1.4;}
-.summary-title{font-family:'Playfair Display',serif;font-size:0.95rem;color:var(--teal);font-weight:600;margin-bottom:2px;}
-.summary-desc{font-size:0.75rem;color:var(--text-mid);line-height:1.5;font-weight:300;}
-.footer{margin-top:24px;font-size:0.7rem;color:var(--text-mid);text-align:center;}
-</style></head><body>
-<div class="wrap">
-<h1>${chartName}</h1>
-<p class="info">${chartInfo}</p>
-<div class="layout">
-<div class="bg-wrap">${svgContent}</div>
-<div class="card"><h3>Chart Summary</h3>${summaryContent}</div>
-</div>
-<p class="footer">Generated by ROI of Peace · roiofpeace.com</p>
-</div></body></html>`;
-
-  const blob = new Blob([html], { type: 'text/html' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `${(meta.name || 'chart').replace(/\s+/g,'-').toLowerCase()}-human-design.html`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-populateSelects();
-
-// ── City Autocomplete (OpenStreetMap Nominatim — no API key needed) ──
-let _autocompleteTimer = null;
-
-async function cityAutocomplete(val) {
-  const list = document.getElementById("autocomplete-list");
-  clearTimeout(_autocompleteTimer);
-  if (val.length < 2) { list.style.display = "none"; return; }
-  _autocompleteTimer = setTimeout(async () => {
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&addressdetails=1&limit=6&featuretype=city,town,village`, { headers: {"Accept-Language": "en"} });
-      const data = await res.json();
-      if (!data.length) { list.style.display = "none"; return; }
-      list.innerHTML = data.map((item, i) => {
-        const addr = item.address;
-        const city = addr.city || addr.town || addr.village || addr.county || item.name;
-        const state = addr.state || addr.region || "";
-        const country = addr.country || "";
-        const full = [city, state, country].filter(Boolean).join(", ");
-        return `<div class="autocomplete-item" onclick="selectCity(${i})" data-full="${full}"><span class="city-main">${city}</span><br><span class="city-sub">${[state,country].filter(Boolean).join(", ")}</span></div>`;
-      }).join("");
-      list.style.display = "block";
-    } catch(e) { list.style.display = "none"; }
-  }, 350);
-}
-
-function selectCity(i) {
-  const list = document.getElementById("autocomplete-list");
-  const item = list.querySelectorAll(".autocomplete-item")[i];
-  const full = item.getAttribute("data-full");
-  document.getElementById("birth-place").value = full;
-  document.getElementById("birth-place-full").value = full;
-  list.style.display = "none";
-}
-
-document.addEventListener("click", (e) => {
-  if (!e.target.closest(".autocomplete-wrap")) {
-    document.getElementById("autocomplete-list").style.display = "none";
-  }
-});
-</script>
-</body>
-</html>
