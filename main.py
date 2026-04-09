@@ -267,19 +267,20 @@ def calculate_chart(req: ChartRequest):
             utc_dt.hour + utc_dt.minute / 60.0
         )
         # Design date: exactly 88 degrees of solar arc before birth
-        # Iteratively find the JD when Sun was exactly 88° behind birth Sun
+        # Newton-Raphson method using Sun's actual speed for fast convergence
         flags = swe.FLG_SWIEPH | swe.FLG_SPEED
-        birth_sun_lon = swe.calc_ut(birth_jd, swe.SUN, flags)[0][0]
+        birth_sun_data = swe.calc_ut(birth_jd, swe.SUN, flags)[0]
+        birth_sun_lon = birth_sun_data[0]
         target_lon = (birth_sun_lon - 88.0) % 360.0
-        design_jd = birth_jd - 90.0  # Start ~90 days back as initial estimate
-        for _ in range(100):
-            current_lon = swe.calc_ut(design_jd, swe.SUN, flags)[0][0]
-            # Handle wrap-around at 0°/360°
+        design_jd = birth_jd - 90.0  # Good starting estimate (~88 days)
+        for _ in range(20):
+            sun_data = swe.calc_ut(design_jd, swe.SUN, flags)[0]
+            current_lon = sun_data[0]
+            sun_speed = sun_data[3]  # degrees/day (actual speed from Swiss Ephemeris)
             diff = (target_lon - current_lon + 180) % 360 - 180
-            if abs(diff) < 0.000001:  # Sub-arcsecond precision
+            if abs(diff) < 0.0000001:  # ~0.00036 arcseconds — extremely precise
                 break
-            # Sun moves ~1°/day so diff in degrees ≈ diff in days
-            design_jd += diff
+            design_jd += diff / sun_speed  # Newton-Raphson step
 
         # 4. Calculate planet positions for both dates
         planet_keys = list(PLANETS.keys())
