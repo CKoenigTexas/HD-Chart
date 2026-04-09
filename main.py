@@ -107,16 +107,19 @@ def longitude_to_gate_line(lon: float) -> dict:
 
 def get_planet_longitude(jd: float, planet_key: str) -> float:
     """Return ecliptic longitude for a planet at a given Julian Day."""
+    # Use high-precision flag for all calculations
+    flags = swe.FLG_SWIEPH | swe.FLG_SPEED
+
     if planet_key == "earth":
-        sun_lon = swe.calc_ut(jd, swe.SUN)[0][0]
+        sun_lon = swe.calc_ut(jd, swe.SUN, flags)[0][0]
         return (sun_lon + 180.0) % 360.0
 
     if planet_key == "south_node":
-        nn_lon = swe.calc_ut(jd, swe.TRUE_NODE)[0][0]
+        nn_lon = swe.calc_ut(jd, swe.TRUE_NODE, flags)[0][0]
         return (nn_lon + 180.0) % 360.0
 
     planet_id = PLANETS[planet_key]
-    result = swe.calc_ut(jd, planet_id)
+    result = swe.calc_ut(jd, planet_id, flags)
     return result[0][0]
 
 
@@ -265,11 +268,12 @@ def calculate_chart(req: ChartRequest):
         )
         # Design date: exactly 88 degrees of solar arc before birth
         # Iteratively find the JD when Sun was exactly 88° behind birth Sun
-        birth_sun_lon = swe.calc_ut(birth_jd, swe.SUN)[0][0]
+        flags = swe.FLG_SWIEPH | swe.FLG_SPEED
+        birth_sun_lon = swe.calc_ut(birth_jd, swe.SUN, flags)[0][0]
         target_lon = (birth_sun_lon - 88.0) % 360.0
         design_jd = birth_jd - 90.0  # Start ~90 days back as initial estimate
         for _ in range(100):
-            current_lon = swe.calc_ut(design_jd, swe.SUN)[0][0]
+            current_lon = swe.calc_ut(design_jd, swe.SUN, flags)[0][0]
             # Handle wrap-around at 0°/360°
             diff = (target_lon - current_lon + 180) % 360 - 180
             if abs(diff) < 0.000001:  # Sub-arcsecond precision
