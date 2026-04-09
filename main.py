@@ -262,13 +262,13 @@ def calculate_chart(req: ChartRequest):
         utc_dt   = local_aware.astimezone(pytz.utc)
 
         # 3. Julian Day (UT) — use Swiss Ephemeris utc_to_jd for maximum precision
-        # This properly accounts for leap seconds and gives sub-second accuracy
-        ret, birth_jd_et, birth_jd_ut = swe.utc_to_jd(
+        # Returns (jd_et, jd_ut) tuple
+        jd_result = swe.utc_to_jd(
             utc_dt.year, utc_dt.month, utc_dt.day,
             utc_dt.hour, utc_dt.minute, float(utc_dt.second),
             swe.GREG_CAL
         )
-        birth_jd = birth_jd_ut  # Use Universal Time (UT) Julian Day
+        birth_jd = jd_result[1]  # jd_ut — Universal Time Julian Day
         # Design date: exactly 88 degrees of solar arc before birth
         # Newton-Raphson method using Sun's actual speed for fast convergence
         flags = swe.FLG_SWIEPH | swe.FLG_SPEED
