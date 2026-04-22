@@ -178,7 +178,7 @@ def determine_type_strategy_authority(defined_centers: set, defined_channels: li
 
     # Authority
     if has_solar:
-        authority = "Emotional / Solar Plexus"
+        authority = "Emotional"
         auth_desc = "Sleep on decisions. Clarity comes in waves, not all at once."
     elif has_sacral:
         authority = "Sacral"
@@ -187,16 +187,16 @@ def determine_type_strategy_authority(defined_centers: set, defined_channels: li
         authority = "Splenic"
         auth_desc = "Trust the quiet, in-the-moment instinct. It speaks once and softly."
     elif has_ego:
-        authority = "Ego / Will"
+        authority = "Will"
         auth_desc = "Make decisions based on what you truly want and are willing to commit to."
     elif has_g:
         authority = "Self-Projected"
         auth_desc = "Talk it out with people you trust. Hearing your own voice brings clarity."
     elif "HEAD" in defined_centers or "AJNA" in defined_centers:
-        authority = "Mental / Sounding Board"
+        authority = "Mental"
         auth_desc = "Talk through decisions with different trusted people and notice what resonates."
     else:
-        authority = "Lunar (Reflector)"
+        authority = "Timing"
         auth_desc = "Track how you feel across a full lunar cycle before committing."
 
     return {
@@ -367,4 +367,3 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
