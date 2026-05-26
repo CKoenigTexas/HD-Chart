@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -6,6 +7,11 @@ import swisseph as swe
 from timezonefinder import TimezoneFinder
 from geopy.geocoders import Nominatim
 import pytz
+try:
+    from weasyprint import HTML as WeasyprintHTML
+    WEASYPRINT_AVAILABLE = True
+except ImportError:
+    WEASYPRINT_AVAILABLE = False
 
 app = FastAPI(title="ROI of Peace — Human Design API")
 
@@ -355,6 +361,27 @@ def calculate_chart(req: ChartRequest):
 
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+# ── PDF Generation endpoint ────────────────────────────────────────────────
+class PDFRequest(BaseModel):
+    html: str
+    filename: str = "human-design-chart.pdf"
+
+@app.post("/generate-pdf")
+def generate_pdf(req: PDFRequest):
+    if not WEASYPRINT_AVAILABLE:
+        raise HTTPException(status_code=500, detail="PDF generation not available")
+    try:
+        pdf_bytes = WeasyprintHTML(string=req.html).write_pdf()
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{req.filename}"'}
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
