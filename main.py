@@ -7,11 +7,7 @@ import swisseph as swe
 from timezonefinder import TimezoneFinder
 from geopy.geocoders import Nominatim
 import pytz
-try:
-    from weasyprint import HTML as WeasyprintHTML
-    WEASYPRINT_AVAILABLE = True
-except ImportError:
-    WEASYPRINT_AVAILABLE = False
+
 
 app = FastAPI(title="ROI of Peace — Human Design API")
 
@@ -366,24 +362,23 @@ def calculate_chart(req: ChartRequest):
 
 
 
-# ── PDF Generation endpoint ────────────────────────────────────────────────
+# ── PDF endpoint — returns HTML for browser-side printing ──────────────────
 class PDFRequest(BaseModel):
     html: str
     filename: str = "human-design-chart.pdf"
 
 @app.post("/generate-pdf")
 def generate_pdf(req: PDFRequest):
-    if not WEASYPRINT_AVAILABLE:
-        raise HTTPException(status_code=500, detail="PDF generation not available")
-    try:
-        pdf_bytes = WeasyprintHTML(string=req.html).write_pdf()
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{req.filename}"'}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Return the HTML with print styles so browser can save as PDF
+    print_html = req.html.replace(
+        "</style>",
+        "@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } } </style>"
+    )
+    return Response(
+        content=print_html,
+        media_type="text/html",
+        headers={"Content-Disposition": f'inline; filename="{req.filename}"'}
+    )
 
 
 @app.get("/")
