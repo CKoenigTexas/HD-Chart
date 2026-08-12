@@ -1,11 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
-import asyncio
-try:
-    from pyppeteer import launch
-    PUPPETEER_AVAILABLE = True
-except ImportError:
-    PUPPETEER_AVAILABLE = False
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -388,32 +382,166 @@ def generate_pdf(req: PDFRequest):
 
 
 
-# ── PDF Generation via Puppeteer ───────────────────────────────────────────
-class PDFRequest(BaseModel):
-    html: str
-    filename: str = "human-design-chart.pdf"
+# ── PDF Generation via ReportLab ───────────────────────────────────────────
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.lib.colors import HexColor
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
+import io
+from html.parser import HTMLParser
+
+class HTMLTextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.result = []
+        self.current_tag = None
+    def handle_starttag(self, tag, attrs):
+        self.current_tag = tag
+    def handle_data(self, data):
+        text = data.strip()
+        if text:
+            self.result.append((self.current_tag, text))
+
+class PDFChartRequest(BaseModel):
+    name: str = ""
+    birth_info: str = ""
+    chart_type: str = ""
+    strategy: str = ""
+    strategy_desc: str = ""
+    authority: str = ""
+    authority_desc: str = ""
+    profile: str = ""
+    profile_desc: str = ""
+    signature: str = ""
+    not_self: str = ""
+    manifestation_style: str = ""
+    manifestation_desc: str = ""
+    defined_centers: list = []
+    undefined_centers: list = []
+    channels: list = []
+    gates: list = []
+    type_desc: str = ""
 
 @app.post("/generate-pdf")
-async def generate_pdf(req: PDFRequest):
-    if not PUPPETEER_AVAILABLE:
-        raise HTTPException(status_code=500, detail="PDF generation not available")
+def generate_pdf(req: PDFChartRequest):
     try:
-        browser = await launch(
-            executablePath="/usr/bin/chromium",
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+        buffer = io.BytesIO()
+        
+        # Colors
+        teal = HexColor("#3D7A7A")
+        teal_light = HexColor("#A8C8D8")
+        text_dark = HexColor("#2C3E35")
+        text_mid = HexColor("#5A6B5E")
+        linen = HexColor("#F0EDE8")
+        linen_dark = HexColor("#E5E0D8")
+        
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=20*mm,
+            leftMargin=20*mm,
+            topMargin=20*mm,
+            bottomMargin=20*mm,
         )
-        page = await browser.newPage()
-        await page.setContent(req.html, waitUntil="domcontentloaded")
-        pdf_bytes = await page.pdf({
-            "format": "A4",
-            "printBackground": True,
-            "margin": {"top": "15mm", "bottom": "15mm", "left": "12mm", "right": "12mm"}
-        })
-        await browser.close()
+        
+        styles = getSampleStyleSheet()
+        
+        # Custom styles
+        title_style = ParagraphStyle("title", fontSize=20, textColor=teal, spaceAfter=2*mm, fontName="Helvetica-Bold")
+        info_style = ParagraphStyle("info", fontSize=8, textColor=text_mid, spaceAfter=6*mm)
+        section_style = ParagraphStyle("section", fontSize=12, textColor=teal, spaceAfter=3*mm, fontName="Helvetica-Bold", spaceBefore=4*mm)
+        label_style = ParagraphStyle("label", fontSize=8, textColor=text_mid, spaceAfter=1*mm)
+        value_style = ParagraphStyle("value", fontSize=11, textColor=text_dark, spaceAfter=1*mm, fontName="Helvetica-Bold")
+        desc_style = ParagraphStyle("desc", fontSize=9, textColor=text_dark, spaceAfter=4*mm, leading=14)
+        center_name_style = ParagraphStyle("center_name", fontSize=10, textColor=teal, fontName="Helvetica-Bold", spaceAfter=1*mm)
+        center_gift_style = ParagraphStyle("center_gift", fontSize=7, textColor=teal_light, fontName="Helvetica-Bold", spaceAfter=1*mm)
+        center_desc_style = ParagraphStyle("center_desc", fontSize=9, textColor=text_dark, spaceAfter=3*mm, leading=13)
+        channel_name_style = ParagraphStyle("channel_name", fontSize=10, textColor=teal, fontName="Helvetica-Bold", spaceAfter=1*mm)
+        channel_desc_style = ParagraphStyle("channel_desc", fontSize=9, textColor=text_dark, spaceAfter=3*mm, leading=13)
+        gate_style = ParagraphStyle("gate", fontSize=9, textColor=text_dark, spaceAfter=2*mm, leading=13)
+        footer_style = ParagraphStyle("footer", fontSize=7, textColor=text_mid, alignment=TA_CENTER, spaceBefore=4*mm)
+        
+        story = []
+        
+        # Title
+        story.append(Paragraph(f"{req.name}'s Human Design Chart", title_style))
+        story.append(Paragraph(req.birth_info, info_style))
+        story.append(HRFlowable(width="100%", thickness=1, color=linen_dark, spaceAfter=4*mm))
+        
+        # Chart Summary
+        story.append(Paragraph("Chart Summary", section_style))
+        story.append(HRFlowable(width="100%", thickness=1, color=linen_dark, spaceAfter=3*mm))
+        
+        def add_summary_item(label, value, desc=""):
+            story.append(Paragraph(label, label_style))
+            story.append(Paragraph(value, value_style))
+            if desc:
+                story.append(Paragraph(desc, desc_style))
+            else:
+                story.append(Spacer(1, 3*mm))
+            story.append(HRFlowable(width="100%", thickness=0.5, color=linen, spaceAfter=2*mm))
+        
+        add_summary_item("Type — Your divine innate gifts and the foundation of how you operate best.", req.chart_type, req.type_desc)
+        add_summary_item("Strategy — How you make things happen.", req.strategy, req.strategy_desc)
+        add_summary_item("Inner Authority — How you make decisions best.", req.authority, req.authority_desc)
+        add_summary_item("Profile — Layers of your personality.", req.profile, req.profile_desc)
+        add_summary_item("Signature — A feeling that you are aligned.", req.signature)
+        add_summary_item("Not-Self Theme — A feeling you get when you are misaligned and something is off.", req.not_self)
+        add_summary_item("Manifestation Style", req.manifestation_style, req.manifestation_desc)
+        
+        # Defined Centers
+        story.append(Spacer(1, 2*mm))
+        story.append(Paragraph("Your Defined Centers", section_style))
+        story.append(Paragraph("Centers are like chakras, energy hubs in the body.", label_style))
+        story.append(HRFlowable(width="100%", thickness=1, color=linen_dark, spaceAfter=3*mm))
+        
+        for center in req.defined_centers:
+            story.append(Paragraph(center.get("name", ""), center_name_style))
+            story.append(Paragraph(center.get("gift", ""), center_gift_style))
+            story.append(Paragraph(center.get("desc", ""), center_desc_style))
+            story.append(HRFlowable(width="100%", thickness=0.5, color=linen, spaceAfter=2*mm))
+        
+        # Undefined Centers
+        story.append(Spacer(1, 2*mm))
+        story.append(Paragraph("Your Undefined Centers", section_style))
+        story.append(Paragraph("Centers are like chakras, energy hubs in the body. These centers are open, so their energy ebbs and flows.", label_style))
+        story.append(HRFlowable(width="100%", thickness=1, color=linen_dark, spaceAfter=3*mm))
+        
+        for center in req.undefined_centers:
+            story.append(Paragraph(center.get("name", ""), center_name_style))
+            story.append(Paragraph(center.get("gift", ""), center_gift_style))
+            story.append(Paragraph(center.get("desc", ""), center_desc_style))
+            story.append(HRFlowable(width="100%", thickness=0.5, color=linen, spaceAfter=2*mm))
+        
+        # Gates & Channels
+        story.append(Spacer(1, 2*mm))
+        story.append(Paragraph("Gates &amp; Channels — Characteristics You Were Born With", section_style))
+        story.append(HRFlowable(width="100%", thickness=1, color=linen_dark, spaceAfter=3*mm))
+        
+        for ch in req.channels:
+            story.append(Paragraph(ch.get("name", ""), channel_name_style))
+            story.append(Paragraph(ch.get("desc", ""), channel_desc_style))
+            story.append(HRFlowable(width="100%", thickness=0.5, color=linen, spaceAfter=2*mm))
+        
+        if req.gates:
+            story.append(Paragraph("Gates", channel_name_style))
+            story.append(HRFlowable(width="100%", thickness=0.5, color=linen_dark, spaceAfter=2*mm))
+            for gate in req.gates:
+                story.append(Paragraph(f"<b>{gate.get('number', '')}</b>  {gate.get('desc', '')}", gate_style))
+        
+        # Footer
+        story.append(Paragraph("Generated by ROI of Peace · roiofpeace.com", footer_style))
+        
+        doc.build(story)
+        buffer.seek(0)
+        
+        filename = req.name.replace(" ", "-").lower() + "-human-design.pdf" if req.name else "human-design.pdf"
         return Response(
-            content=pdf_bytes,
+            content=buffer.read(),
             media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{req.filename}"'}
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
