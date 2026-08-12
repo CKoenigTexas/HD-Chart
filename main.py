@@ -362,26 +362,6 @@ def calculate_chart(req: ChartRequest):
 
 
 
-# ── PDF endpoint — returns HTML for browser-side printing ──────────────────
-class PDFRequest(BaseModel):
-    html: str
-    filename: str = "human-design-chart.pdf"
-
-@app.post("/generate-pdf")
-def generate_pdf(req: PDFRequest):
-    # Return the HTML with print styles so browser can save as PDF
-    print_html = req.html.replace(
-        "</style>",
-        "@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } } </style>"
-    )
-    return Response(
-        content=print_html,
-        media_type="text/html",
-        headers={"Content-Disposition": f'inline; filename="{req.filename}"'}
-    )
-
-
-
 # ── PDF Generation via ReportLab ───────────────────────────────────────────
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
