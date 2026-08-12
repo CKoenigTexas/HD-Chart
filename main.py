@@ -440,8 +440,8 @@ def generate_pdf(req: PDFChartRequest):
             topMargin=18*mm, bottomMargin=18*mm,
         )
 
-        name_s   = ParagraphStyle("name",  fontName=title_font,         fontSize=26, textColor=teal,      spaceAfter=1*mm)
-        subt_s   = ParagraphStyle("subt",  fontName=title_font,         fontSize=15, textColor=teal,      spaceAfter=6*mm)
+        name_s   = ParagraphStyle("name",  fontName=title_font,         fontSize=24, textColor=teal,      spaceAfter=4*mm)
+        subt_s   = ParagraphStyle("subt",  fontName="Helvetica",        fontSize=11, textColor=text_mid,  spaceAfter=6*mm)
         sec_s    = ParagraphStyle("sec",   fontName="Helvetica-Bold",   fontSize=13, textColor=teal,      spaceAfter=2*mm, spaceBefore=4*mm)
         sub_s    = ParagraphStyle("sub",   fontName="Helvetica-Oblique",fontSize=9,  textColor=text_mid,  spaceAfter=3*mm)
         label_s  = ParagraphStyle("label", fontName="Helvetica",        fontSize=9,  textColor=text_mid,  spaceAfter=1*mm)
@@ -527,7 +527,7 @@ def generate_pdf(req: PDFChartRequest):
         try:
             logo_bytes = base64.b64decode(ROI_LOGO_B64)
             logo_buf = io.BytesIO(logo_bytes)
-            logo_img = Image(logo_buf, width=28*mm, height=14*mm)
+            logo_img = Image(logo_buf, width=50*mm, height=25*mm)
             logo_img.hAlign = "CENTER"
             story.append(logo_img)
         except Exception:
