@@ -548,7 +548,7 @@ def generate_pdf(req: PDFChartRequest):
         return Response(
             content=buffer.read(),
             media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"\'}
+            headers={"Content-Disposition": "attachment; filename=" + filename}
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
