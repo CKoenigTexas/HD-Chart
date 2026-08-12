@@ -367,9 +367,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor, white
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle, KeepTogether
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, KeepTogether
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
-from reportlab.platypus.flowables import RoundedRect
 import io
 
 class PDFChartRequest(BaseModel):
