@@ -525,11 +525,11 @@ def generate_pdf(req: PDFChartRequest):
         # Footer with logo
         story.append(HRFlowable(width="100%", thickness=1, color=linen_dark, spaceBefore=6*mm, spaceAfter=4*mm))
         try:
-            logo_path = _get_logo_path()
-            logo_img = Image(logo_path, width=28*mm, height=14*mm)
+            logo_bytes = base64.b64decode(ROI_LOGO_B64)
+            logo_buf = io.BytesIO(logo_bytes)
+            logo_img = Image(logo_buf, width=28*mm, height=14*mm)
             logo_img.hAlign = "CENTER"
             story.append(logo_img)
-            os.unlink(logo_path)
         except Exception:
             pass
         footer_s = ParagraphStyle("foot", fontName="Helvetica-Oblique", fontSize=8, textColor=text_mid, alignment=TA_CENTER, spaceAfter=2*mm)
