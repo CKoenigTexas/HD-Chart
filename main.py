@@ -403,7 +403,7 @@ async def generate_pdf(req: PDFRequest):
             args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
         )
         page = await browser.newPage()
-        await page.setContent(req.html, waitUntil="networkidle0")
+        await page.setContent(req.html, waitUntil="domcontentloaded")
         pdf_bytes = await page.pdf({
             "format": "A4",
             "printBackground": True,
