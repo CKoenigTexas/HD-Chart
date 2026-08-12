@@ -1,5 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
+import asyncio
+try:
+    from pyppeteer import launch
+    PUPPETEER_AVAILABLE = True
+except ImportError:
+    PUPPETEER_AVAILABLE = False
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -379,6 +385,38 @@ def generate_pdf(req: PDFRequest):
         media_type="text/html",
         headers={"Content-Disposition": f'inline; filename="{req.filename}"'}
     )
+
+
+
+# ── PDF Generation via Puppeteer ───────────────────────────────────────────
+class PDFRequest(BaseModel):
+    html: str
+    filename: str = "human-design-chart.pdf"
+
+@app.post("/generate-pdf")
+async def generate_pdf(req: PDFRequest):
+    if not PUPPETEER_AVAILABLE:
+        raise HTTPException(status_code=500, detail="PDF generation not available")
+    try:
+        browser = await launch(
+            executablePath="/usr/bin/chromium",
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+        )
+        page = await browser.newPage()
+        await page.setContent(req.html, waitUntil="networkidle0")
+        pdf_bytes = await page.pdf({
+            "format": "A4",
+            "printBackground": True,
+            "margin": {"top": "15mm", "bottom": "15mm", "left": "12mm", "right": "12mm"}
+        })
+        await browser.close()
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{req.filename}"'}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/")
