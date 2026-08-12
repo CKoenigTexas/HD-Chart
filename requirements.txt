@@ -5,3 +5,5 @@ timezonefinder==6.5.2
 geopy==2.4.1
 pytz==2024.1
 pydantic==2.7.1
+pyppeteer==2.0.0
+
