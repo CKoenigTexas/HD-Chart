@@ -362,12 +362,12 @@ def calculate_chart(req: ChartRequest):
 
 
 
-# ── PDF Generation via ReportLab (Styled) ─────────────────────────────────
+# ── PDF Generation via ReportLab (Styled v2) ──────────────────────────────
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.lib.colors import HexColor, white
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, KeepTogether
+from reportlab.lib.colors import HexColor
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 import io
 
@@ -396,82 +396,80 @@ def generate_pdf(req: PDFChartRequest):
     try:
         buffer = io.BytesIO()
 
-        # Brand colors
         teal       = HexColor("#3D7A7A")
-        teal_light = HexColor("#A8C8D8")
+        teal_light = HexColor("#6AADAD")
         text_dark  = HexColor("#2C3E35")
         text_mid   = HexColor("#5A6B5E")
         linen      = HexColor("#F0EDE8")
-        linen_dark = HexColor("#E5E0D8")
-        card_bg    = HexColor("#FFFFFF")
+        linen_dark = HexColor("#D8D4CE")
 
         doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            rightMargin=18*mm,
-            leftMargin=18*mm,
-            topMargin=18*mm,
-            bottomMargin=18*mm,
+            buffer, pagesize=A4,
+            rightMargin=18*mm, leftMargin=18*mm,
+            topMargin=18*mm, bottomMargin=18*mm,
         )
 
-        # Styles
-        title_s   = ParagraphStyle("title",   fontName="Helvetica-Bold", fontSize=20, textColor=teal,      spaceAfter=2*mm)
-        info_s    = ParagraphStyle("info",    fontName="Helvetica",      fontSize=8,  textColor=text_mid,  spaceAfter=5*mm)
-        sec_s     = ParagraphStyle("sec",     fontName="Helvetica-Bold", fontSize=11, textColor=teal,      spaceAfter=2*mm, spaceBefore=2*mm)
-        sub_s     = ParagraphStyle("sub",     fontName="Helvetica",      fontSize=8,  textColor=text_mid,  spaceAfter=3*mm)
-        label_s   = ParagraphStyle("label",   fontName="Helvetica",      fontSize=8,  textColor=text_mid,  spaceAfter=1*mm)
-        value_s   = ParagraphStyle("value",   fontName="Helvetica-Bold", fontSize=11, textColor=text_dark, spaceAfter=1*mm)
-        desc_s    = ParagraphStyle("desc",    fontName="Helvetica",      fontSize=9,  textColor=text_dark, spaceAfter=4*mm, leading=13)
-        cname_s   = ParagraphStyle("cname",   fontName="Helvetica-Bold", fontSize=10, textColor=teal,      spaceAfter=1*mm)
-        cgift_s   = ParagraphStyle("cgift",   fontName="Helvetica-Bold", fontSize=7,  textColor=teal_light,spaceAfter=2*mm)
-        cdesc_s   = ParagraphStyle("cdesc",   fontName="Helvetica",      fontSize=9,  textColor=text_dark, spaceAfter=4*mm, leading=13)
-        gate_s    = ParagraphStyle("gate",    fontName="Helvetica",      fontSize=9,  textColor=text_dark, spaceAfter=2*mm, leading=13)
-        footer_s  = ParagraphStyle("footer",  fontName="Helvetica",      fontSize=7,  textColor=text_mid,  alignment=TA_CENTER, spaceBefore=4*mm)
+        # ── Styles ──
+        name_s    = ParagraphStyle("name",  fontName="Times-BoldItalic", fontSize=22, textColor=teal,      spaceAfter=1*mm, alignment=TA_LEFT)
+        sub_title = ParagraphStyle("subt",  fontName="Times-Italic",     fontSize=13, textColor=teal,      spaceAfter=6*mm)
+        sec_s     = ParagraphStyle("sec",   fontName="Helvetica-Bold",   fontSize=13, textColor=teal,      spaceAfter=2*mm, spaceBefore=4*mm)
+        sub_s     = ParagraphStyle("sub",   fontName="Helvetica-Oblique",fontSize=9,  textColor=text_mid,  spaceAfter=3*mm)
+        label_s   = ParagraphStyle("label", fontName="Helvetica",        fontSize=9,  textColor=text_mid,  spaceAfter=1*mm)
+        value_s   = ParagraphStyle("value", fontName="Helvetica-Bold",   fontSize=13, textColor=text_dark, spaceAfter=2*mm)
+        desc_s    = ParagraphStyle("desc",  fontName="Helvetica",        fontSize=10, textColor=text_dark,  spaceAfter=5*mm, leading=14)
+        cname_s   = ParagraphStyle("cname", fontName="Times-Bold",       fontSize=12, textColor=teal,      spaceAfter=1*mm)
+        cgift_s   = ParagraphStyle("cgift", fontName="Helvetica-Bold",   fontSize=8,  textColor=teal_light, spaceAfter=2*mm)
+        cdesc_s   = ParagraphStyle("cdesc", fontName="Helvetica",        fontSize=10, textColor=text_dark,  spaceAfter=5*mm, leading=14)
+        gate_s    = ParagraphStyle("gate",  fontName="Helvetica",        fontSize=10, textColor=text_dark,  spaceAfter=3*mm, leading=14)
+        footer_s  = ParagraphStyle("foot",  fontName="Helvetica-Oblique",fontSize=8,  textColor=text_mid,  alignment=TA_CENTER, spaceBefore=4*mm)
 
         story = []
 
-        # ── Title ──
-        story.append(Paragraph(f"{req.name}'s Human Design Chart", title_s))
-        story.append(Paragraph(req.birth_info, info_s))
-        story.append(HRFlowable(width="100%", thickness=1.5, color=teal, spaceAfter=5*mm))
+        # ── Title (elegant serif) ──
+        story.append(Paragraph(req.name, name_s))
+        story.append(Paragraph("Human Design Chart", sub_title))
+        story.append(HRFlowable(width="100%", thickness=2, color=teal, spaceAfter=6*mm))
 
-        # ── Helper: section header ──
+        def hr(): story.append(HRFlowable(width="100%", thickness=0.5, color=linen_dark, spaceAfter=3*mm))
         def section(title, subtitle=None):
             story.append(Paragraph(title, sec_s))
-            story.append(HRFlowable(width="100%", thickness=1, color=linen_dark, spaceAfter=3*mm))
+            story.append(HRFlowable(width="100%", thickness=1.5, color=teal, spaceAfter=2*mm))
             if subtitle:
                 story.append(Paragraph(subtitle, sub_s))
 
-        # ── Helper: summary item ──
-        def summary_item(label, value, desc=""):
-            items = [Paragraph(label, label_s), Paragraph(value, value_s)]
-            if desc:
-                items.append(Paragraph(desc, desc_s))
-            else:
-                items.append(Spacer(1, 2*mm))
-            items.append(HRFlowable(width="100%", thickness=0.5, color=linen_dark, spaceAfter=2*mm))
-            story.extend(items)
+        def clean(text):
+            return text.replace(" — ", ", ").replace("—", ",") if text else ""
 
-        # ── Helper: center item ──
+        def summary_item(label, value, desc=""):
+            story.append(Paragraph(clean(label), label_s))
+            story.append(Paragraph(clean(value), value_s))
+            if desc:
+                story.append(Paragraph(clean(desc), desc_s))
+            else:
+                story.append(Spacer(1, 3*mm))
+            hr()
+
         def center_item(name, gift, desc):
-            story.append(Paragraph(name, cname_s))
-            story.append(Paragraph(gift.upper(), cgift_s))
-            story.append(Paragraph(desc, cdesc_s))
-            story.append(HRFlowable(width="100%", thickness=0.5, color=linen_dark, spaceAfter=2*mm))
+            story.append(Paragraph(clean(name), cname_s))
+            # Remove duplicate center name from gift label
+            gift_clean = gift.replace(name + " / ", "").replace(name + "/", "")
+            story.append(Paragraph(clean(gift_clean).upper(), cgift_s))
+            story.append(Paragraph(clean(desc), cdesc_s))
+            hr()
 
         # Chart Summary
         section("Chart Summary")
-        summary_item("Type — Your divine innate gifts and the foundation of how you operate best.", req.chart_type, req.type_desc)
-        summary_item("Strategy — How you make things happen.", req.strategy, req.strategy_desc)
-        summary_item("Inner Authority — How you make decisions best.", req.authority, req.authority_desc)
-        summary_item("Profile — Layers of your personality.", req.profile, req.profile_desc)
-        summary_item("Signature — A feeling that you are aligned.", req.signature)
-        summary_item("Not-Self Theme — A feeling you get when you are misaligned and something is off.", req.not_self)
+        summary_item("Type, Your divine innate gifts and the foundation of how you operate best.", req.chart_type, req.type_desc)
+        summary_item("Strategy, How you make things happen.", req.strategy, req.strategy_desc)
+        summary_item("Inner Authority, How you make decisions best.", req.authority, req.authority_desc)
+        summary_item("Profile, Layers of your personality.", req.profile, req.profile_desc)
+        summary_item("Signature, A feeling that you are aligned.", req.signature)
+        summary_item("Not-Self Theme, A feeling you get when you are misaligned and something is off.", req.not_self)
         summary_item("Manifestation Style", req.manifestation_style, req.manifestation_desc)
 
         # Defined Centers
         story.append(Spacer(1, 3*mm))
-        section("Your Defined Centers", "Centers are like chakras, energy hubs in the body.")
+        section("Your Defined Centers", "Centers are like chakras, energy hubs in the body. Defined centers are gifts you always have that are always on.")
         for c in req.defined_centers:
             center_item(c.get("name",""), c.get("gift",""), c.get("desc",""))
 
@@ -483,34 +481,31 @@ def generate_pdf(req: PDFChartRequest):
 
         # Gates & Channels
         story.append(Spacer(1, 3*mm))
-        section("Gates & Channels — Characteristics You Were Born With")
-
+        section("Gates & Channels, Characteristics You Were Born With")
         for ch in req.channels:
-            story.append(Paragraph(ch.get("name",""), cname_s))
-            story.append(Paragraph(ch.get("desc",""), cdesc_s))
-            story.append(HRFlowable(width="100%", thickness=0.5, color=linen_dark, spaceAfter=2*mm))
+            story.append(Paragraph(clean(ch.get("name","")), cname_s))
+            story.append(Paragraph(clean(ch.get("desc","")), cdesc_s))
+            hr()
 
         if req.gates:
             story.append(Spacer(1, 2*mm))
             story.append(Paragraph("Gates", cname_s))
             story.append(HRFlowable(width="100%", thickness=0.5, color=linen_dark, spaceAfter=2*mm))
             for g in req.gates:
-                num = g.get("number","")
-                desc = g.get("desc","")
+                num  = g.get("number","")
+                desc = clean(g.get("desc",""))
                 story.append(Paragraph(f"<b><font color='#3D7A7A'>{num}</font></b>  {desc}", gate_s))
 
-        # Footer
-        story.append(HRFlowable(width="100%", thickness=1, color=linen_dark, spaceBefore=4*mm, spaceAfter=2*mm))
+        story.append(HRFlowable(width="100%", thickness=1, color=linen_dark, spaceBefore=6*mm, spaceAfter=2*mm))
         story.append(Paragraph("Generated by ROI of Peace · roiofpeace.com", footer_s))
 
-        # Build with linen background
-        def add_background(canvas, doc):
+        def add_bg(canvas, doc):
             canvas.saveState()
             canvas.setFillColor(linen)
             canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
             canvas.restoreState()
 
-        doc.build(story, onFirstPage=add_background, onLaterPages=add_background)
+        doc.build(story, onFirstPage=add_bg, onLaterPages=add_bg)
         buffer.seek(0)
 
         filename = req.name.replace(" ", "-").lower() + "-human-design.pdf" if req.name else "human-design.pdf"
